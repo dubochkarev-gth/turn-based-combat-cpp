@@ -13,6 +13,20 @@ int randomInt(int min, int max) {
     return dist(gen);
 }
 
+struct BattleLog {
+    string playerAction;
+    string enemyAction;
+};
+
+// clear screen helper
+void clearScreen() {
+#ifdef _WIN32
+    system("cls");
+#else
+    system("clear");
+#endif
+};
+
 // --------------------
 // Base Entity class
 // --------------------
@@ -52,7 +66,7 @@ public:
         return randomInt(1, get_attack_power());
     }
 
-    virtual void info() = 0;
+    virtual void info() const = 0;
 };
 
 // --------------------
@@ -70,7 +84,7 @@ public:
         return 10 + weapon_bonus;
     }
 
-    void info() override {
+    void info() const override {
         cout << get_name() << " HP: " << get_hp() << endl;
     }
 };
@@ -93,32 +107,62 @@ public:
         return base_attack + strength;
     }
 
-    void info() override {
+    void info() const override {
         cout << get_name() << " HP: " << get_hp() << endl;
     }
 };
+
+void renderBattleScreen(
+    const Player& p,
+    const Enemy& e,
+    const BattleLog& log,
+    bool attackBonusReady
+) {
+    clearScreen();
+
+    cout << "====== BATTLE ======\n\n";
+
+    p.info();
+    e.info();
+
+    cout << "\n--------------------\n";
+
+    if (attackBonusReady) {
+        cout << "[Status] Player is focused (next attack boosted)\n";
+    }
+
+    cout << "\n--- Last turn ---\n";
+
+    if (!log.playerAction.empty())
+        cout << log.playerAction << endl;
+
+    if (!log.enemyAction.empty())
+        cout << log.enemyAction << endl;
+
+    cout << "\n--------------------\n";
+}
 
 // --------------------
 // Battle
 // --------------------
 void Battle(Player& p, Enemy& e) {
-    cout << "=== Battle Started ===" << endl;
-    p.info();
-    e.info();
 
     bool attackBonusReady = false;
     const float ATTACK_BONUS_MULTIPLIER = 1.5f;
     const float DEFENSE_BONUS_MULTIPLIER = 0.5f;
+    
     int playerChoice = 0;
-
+    
+    BattleLog log;
     
     while (true) {
-        int dmgToEnemy = p.hit();
-        int dmgToPlayer = e.hit();
+        renderBattleScreen(p, e, log, attackBonusReady);
 
         cout << "Player make a choice: 1 - attack, 2 - defence (bonus to next attack)." << endl;
         cout << "Your choice?" << endl;
         cin >> playerChoice;
+        
+        log = {};
         
         while (playerChoice == 2 && attackBonusReady) {
             cout << "You are already focused! Spend it to attack!" << endl;
@@ -134,6 +178,9 @@ void Battle(Player& p, Enemy& e) {
             cin >> playerChoice;
         } 
         
+        int dmgToEnemy = p.hit();
+        int dmgToPlayer = e.hit();
+        
         if (playerChoice == 1){
             if (!attackBonusReady){
                 e.take_damage(dmgToEnemy);
@@ -144,26 +191,20 @@ void Battle(Player& p, Enemy& e) {
                 attackBonusReady = false;
             }
             
-            cout << p.get_name() << " hits "
-            << e.get_name()
-            << " for " << dmgToEnemy << " damage" << endl;
+            log.playerAction = p.get_name() + " hits "
+            + e.get_name() + " for " + to_string(dmgToEnemy);
         }
         
         if (playerChoice == 2){
            attackBonusReady = true;
            dmgToPlayer *= DEFENSE_BONUS_MULTIPLIER;
+           log.playerAction = p.get_name() + " takes defensive stance";
         }
         
         p.take_damage(dmgToPlayer);
-        cout << e.get_name() << " hits "
-             << p.get_name()
-             << " for " << dmgToPlayer << " damage" << endl;
-
-        cout << endl;
-
-        p.info();
-        e.info();
-        cout << "-------------------------------------------" << endl;
+        log.enemyAction =
+            e.get_name() + " hits " + p.get_name() +
+            " for " + to_string(dmgToPlayer);
 
         if (!p.is_alive()) {
             cout << endl;
@@ -178,6 +219,10 @@ void Battle(Player& p, Enemy& e) {
             cout << "Winner: " << p.get_name() << endl;
             break;
         }
+        
+        //cout << "\nPress Enter to continue...";
+        //cin.ignore();
+        //cin.get();
     }
 }
 
