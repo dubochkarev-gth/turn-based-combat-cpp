@@ -1,0 +1,21 @@
+# ===== Build artifacts =====
+build/
+bin/
+out/
+*.o
+*.obj
+*.exe
+
+# ===== Debug / Release =====
+Debug/
+Release/
+
+# ===== VS Code =====
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/c_cpp_properties.json
+
+# ===== OS junk =====
+Thumbs.db
+.DS_Store
