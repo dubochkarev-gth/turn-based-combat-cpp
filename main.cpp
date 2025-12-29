@@ -25,6 +25,7 @@ void clearScreen() {
 enum class ActionType{
     Attack,
     Heal,
+    Block,
     Skip
 };
 
@@ -57,6 +58,7 @@ class Entity {
 protected:
     int hp;
     string name;
+    bool isBlocking = false;
 
 public:
     Entity(string n, int h)
@@ -70,11 +72,23 @@ public:
         return name;
     }
 
-    void take_damage(int dmg) {
-        hp -= dmg;
+    int take_damage(int dmg) {
+        int finalDamage = 0;
+        const float BLOCK_BONUS_MULTIPLIER = 0.5f;
+
+        if(isBlocking){
+            finalDamage = dmg*BLOCK_BONUS_MULTIPLIER;
+            isBlocking = false;
+        }
+        else{
+            finalDamage = dmg;
+        }
+        hp -= finalDamage;
         if (hp < 0) {
             hp = 0;
         }
+
+        return finalDamage;
     }
     
     bool is_alive() const {
@@ -103,12 +117,20 @@ public:
         result.isCritical = true;
     }
 
-    target.take_damage(dmg);
-
-    result.damage = dmg;
+    result.damage = target.take_damage(dmg);
     result.targetDied = !target.is_alive();
 
     return result;
+    }
+
+    ActionResult block(){
+        ActionResult result;
+        result.type = ActionType::Block;
+        result.actor = name;
+
+        isBlocking = true;
+
+        return result;
     }
 };
 
@@ -158,8 +180,7 @@ public:
 void renderBattleScreen(
     const Player& p,
     const Enemy& e,
-    const BattleLog& log,
-    bool attackBonusReady
+    const BattleLog& log
 ) {
     clearScreen();
 
@@ -170,21 +191,24 @@ void renderBattleScreen(
 
     cout << "\n--------------------\n";
 
-    if (attackBonusReady) {
-        cout << "[Status] Player is focused (next attack boosted)\n";
-    }
-
     cout << "\n--- Last turn ---\n";
 
     if (log.hasPlayerAction) {
-    const ActionResult& r = log.playerAction;
-    cout << r.actor << " hits " << r.target
-         << " for " << r.damage;
+        const ActionResult& r = log.playerAction;
+        if(r.type == ActionType::Attack){
+            cout << r.actor << " hits " << r.target
+            << " for " << r.damage;
 
-    if (r.isCritical)
-        cout << " (CRITICAL)";
+        if (r.isCritical)
+            cout << " (CRITICAL)";
+        }
 
-    cout << endl;
+        if(r.type == ActionType::Block){
+            cout << r.actor << " blocks "
+         << "part of incoming damage ";
+        }
+
+        cout << endl;
 
     if (r.targetDied)
         cout << r.target << " is defeated!" << endl;
@@ -213,49 +237,35 @@ void renderBattleScreen(
 void Battle(Player& p, Enemy& e) {
 
     bool attackBonusReady = false;
-    const float ATTACK_BONUS_MULTIPLIER = 1.5f;
-    const float DEFENSE_BONUS_MULTIPLIER = 0.5f;
-    
+        
     int playerChoice = 0;
   
     BattleLog log;
     
     while (true) {
-        renderBattleScreen(p, e, log, attackBonusReady);
+        renderBattleScreen(p, e, log);
 
-        cout << "Player make a choice: 1 - attack, 2 - defence (bonus to next attack)." << endl;
+        cout << "Player make a choice: 1 - attack, 2 - block (reduce incoming damag)." << endl;
         cout << "Your choice?" << endl;
         cin >> playerChoice;
         
         log.clear();
-        
-        while (playerChoice == 2 && attackBonusReady) {
-            cout << "You are already focused! Spend it to attack!" << endl;
-            cout << "Player make a choice: 1 - attack, 2 - defence (bonus to next attack)." << endl;
-            cout << "Your choice?" << endl;
-            cin >> playerChoice;
-        }
-        
+              
         while (playerChoice != 1 && playerChoice != 2){
             cout << "Wrong Input!!!!!!" << endl;
-            cout << "Player make a choice: 1 - attack, 2 - defence (bonus to next attack)." << endl;
+            cout << "Player make a choice: 1 - attack, 2 - block (reduce incoming damag)." << endl;
             cout << "Your choice?" << endl;
             cin >> playerChoice;
         } 
               
         if (playerChoice == 1){
-            if (!attackBonusReady){
-                log.playerAction = p.attack(e);
-            }
-            else {
-                log.playerAction = p.attack(e);
-                attackBonusReady = false;
-            }
+            log.playerAction = p.attack(e);
             log.hasPlayerAction = true;
         }
         
         if (playerChoice == 2){
-           attackBonusReady = true;  
+           log.playerAction = p.block();
+           log.hasPlayerAction = true; 
         }
         
         log.enemyAction = e.attack(p);
