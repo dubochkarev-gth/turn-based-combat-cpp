@@ -4,6 +4,13 @@
 
 using namespace std;
 
+//CONSTANTS
+
+constexpr float FOCUS_BONUS_MULTIPLIER = 1.5f;
+constexpr int CRIT_CHANCE_PERCENT = 20;
+constexpr float CRIT_MULTIPLIER = 2.0f;
+constexpr float BLOCK_BONUS_MULTIPLIER = 0.5f;
+
 // --------------------
 // Random helper
 // --------------------
@@ -22,12 +29,16 @@ void clearScreen() {
 #endif
 };
 
+//ENUMS
+
 enum class ActionType{
     Attack,
     Heal,
     Block,
     Skip
 };
+
+//STRUCTS
 
 struct ActionResult {
     ActionType type;
@@ -89,8 +100,7 @@ public:
 
     int take_damage(int dmg) {
         int finalDamage = 0;
-        const float BLOCK_BONUS_MULTIPLIER = 0.5f;
-
+        
         if(isBlocking){
             finalDamage = dmg*BLOCK_BONUS_MULTIPLIER;
             isBlocking = false;
@@ -118,7 +128,6 @@ public:
 
     ActionResult attack(Entity& target){
         ActionResult result;
-        const float FOCUS_BONUS_MULTIPLIER = 1.5f;
 
         result.type = ActionType::Attack;
         result.actor = name;
@@ -127,9 +136,9 @@ public:
         int dmg = randomInt(1, get_attack_power());
 
     // крит — пока простой
-        bool crit = randomInt(1, 100) <= 20;
+        bool crit = randomInt(1, 100) <= CRIT_CHANCE_PERCENT;
     if (crit) {
-        dmg *= 2;
+        dmg *= CRIT_MULTIPLIER;
         result.isCritical = true;
     }
     if (has_focus()) {
@@ -197,7 +206,11 @@ public:
     void info() const override {
         cout << get_name() << " HP: " << get_hp() << endl;
     }
+
+    //Here will be extencion for enemy behavior.
 };
+
+//SCREEN DRAW AFTER CALCULATION
 
 void renderBattleScreen(
     const Player& p,
@@ -270,6 +283,8 @@ void Battle(Player& p, Enemy& e) {
     while (true) {
         renderBattleScreen(p, e, log);
 
+        //Couts should be in function not just text in battle.
+
         cout << "Player make a choice: 1 - attack, 2 - block (reduce incoming damage and add focus)." << endl;
         cout << "Your choice?" << endl;
         cin >> playerChoice;
@@ -293,9 +308,11 @@ void Battle(Player& p, Enemy& e) {
            log.hasPlayerAction = true; 
         }
         
+        // Here should be AI swithc for enemy behavior.
         log.enemyAction = e.attack(p);
         log.hasEnemyAction = true;
-
+        
+        // Break should be replaced, because of it last draw of screen not work.
         if (!p.is_alive()) {
             cout << endl;
             cout << "=== Battle Finished ===" << endl;
