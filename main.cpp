@@ -402,6 +402,37 @@ void setupTurnOrder(const vector<Entity*>& entities,
         });
 }
 
+//Executor
+
+void executeAction(const PlannedAction& action,
+                   BattleLog& log,
+                   Player& p){
+
+        if (action.type == ActionType::Attack) {
+
+            if (action.actor == &p) {
+                log.playerAction = p.attack(*action.target);
+                log.hasPlayerAction = true;
+            }
+            else {
+                log.enemyAction = action.actor->attack(*action.target);
+                log.hasEnemyAction = true;
+            }
+        }
+
+        if (action.type == ActionType::Block) {
+
+            if (action.actor == &p) {
+                log.playerAction = p.block();
+                log.hasPlayerAction = true;
+            }
+            else {
+                log.enemyAction =action.actor->block();
+                log.hasEnemyAction = true;
+            }
+        }
+    };
+
 // --------------------
 // Battle
 // --------------------
@@ -444,32 +475,8 @@ void Battle(Player& p, Enemy& e) {
         if (!action.actor->is_alive())
             continue;
 
-        if (action.type == ActionType::Attack) {
+        executeAction(action, log, p);
 
-            if (action.actor == &p) {
-                log.playerAction = p.attack(*action.target);
-                log.hasPlayerAction = true;
-            }
-            else {
-                log.enemyAction =
-                    static_cast<Enemy*>(action.actor)
-                        ->attack(*action.target);
-                log.hasEnemyAction = true;
-            }
-        }
-
-        if (action.type == ActionType::Block) {
-
-            if (action.actor == &p) {
-                log.playerAction = p.block();
-                log.hasPlayerAction = true;
-            }
-            else {
-                log.enemyAction =
-                    static_cast<Enemy*>(action.actor)->block();
-                log.hasEnemyAction = true;
-            }
-        }
     }
 
     renderBattleScreen(p, e, log);
