@@ -6,6 +6,10 @@
 
 using namespace std;
 
+//Forward Declaration;
+
+class Entity;
+
 //CONSTANTS
 
 constexpr float FOCUS_BONUS_MULTIPLIER = 1.5f;
@@ -56,6 +60,12 @@ struct ActionResult {
     bool isCritical = false;
     bool targetDied = false;
     bool usedFocus = false;
+};
+
+struct PlannedAction {
+    Entity* actor = nullptr;
+    ActionType type;
+    Entity* target = nullptr;
 };
 
 struct BattleLog {
@@ -283,6 +293,11 @@ public:
     // иначе Block
         return block();
     }
+
+    ActionType decideAction() {
+    ai.update(*this);
+    return ai.decideAction(*this);
+    }
 };
 
 //SCREEN DRAW AFTER CALCULATION
@@ -384,52 +399,95 @@ void Battle(Player& p, Enemy& e) {
 
     while (true) {
 
-        log.clear();
+    log.clear();
+    vector<PlannedAction> plannedActions;
 
-        for (Entity* actor : turnOrder) {
+    // -------- Decision phase --------
+    for (Entity* actor : turnOrder) {
 
-            if (!actor->is_alive())
-                continue;
+        if (!actor->is_alive())
+            continue;
 
-            if (actor == &p) {
+        if (actor == &p) {
 
-                int playerChoice = 0;
+            int playerChoice = 0;
 
-                while (playerChoice != 1 && playerChoice != 2) {
-                    cout << "Player make a choice: 1 - attack, 2 - block\n";
-                    cin >> playerChoice;
-                }
+            while (playerChoice != 1 && playerChoice != 2) {
+                cout << "Player make a choice: 1 - attack, 2 - block\n";
+                cin >> playerChoice;
+            }
 
-                if (playerChoice == 1)
-                    log.playerAction = p.attack(e);
-                else
-                    log.playerAction = p.block();
+            PlannedAction action;
+            action.actor = &p;
+            action.type = (playerChoice == 1)
+                            ? ActionType::Attack
+                            : ActionType::Block;
+            action.target = &e;
 
+            plannedActions.push_back(action);
+        }
+        else {
+            PlannedAction action;
+            action.actor = actor;
+            action.type =
+                static_cast<Enemy*>(actor)->decideAction();
+            action.target = &p;
+
+            plannedActions.push_back(action);
+        }
+    }
+
+    // -------- Execution phase --------
+    for (const PlannedAction& action : plannedActions) {
+
+        if (!action.actor->is_alive())
+            continue;
+
+        if (action.type == ActionType::Attack) {
+
+            if (action.actor == &p) {
+                log.playerAction = p.attack(*action.target);
                 log.hasPlayerAction = true;
             }
             else {
-                log.enemyAction = e.takeTurn(p);
+                log.enemyAction =
+                    static_cast<Enemy*>(action.actor)
+                        ->attack(*action.target);
                 log.hasEnemyAction = true;
             }
         }
 
-        renderBattleScreen(p, e, log);
+        if (action.type == ActionType::Block) {
 
-        if (!p.is_alive()) {
-            cout << "\n=== Battle Finished ===\n";
-            cout << "Winner: " << e.get_name() << endl;
-            break;
+            if (action.actor == &p) {
+                log.playerAction = p.block();
+                log.hasPlayerAction = true;
+            }
+            else {
+                log.enemyAction =
+                    static_cast<Enemy*>(action.actor)->block();
+                log.hasEnemyAction = true;
+            }
         }
+    }
 
-        if (!e.is_alive()) {
-            cout << "\n=== Battle Finished ===\n";
-            cout << "Winner: " << p.get_name() << endl;
-            break;
-        }
+    renderBattleScreen(p, e, log);
 
-        cout << "\nPress Enter to continue...";
-        cin.ignore();
-        cin.get();
+    if (!p.is_alive()) {
+        cout << "\n=== Battle Finished ===\n";
+        cout << "Winner: " << e.get_name() << endl;
+        break;
+    }
+
+    if (!e.is_alive()) {
+        cout << "\n=== Battle Finished ===\n";
+        cout << "Winner: " << p.get_name() << endl;
+        break;
+    }
+
+    cout << "\nPress Enter to continue...";
+    cin.ignore();
+    cin.get();
     }
 }
 
