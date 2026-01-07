@@ -402,7 +402,7 @@ void setupTurnOrder(const vector<Entity*>& entities,
         });
 }
 
-//Executor
+//Executor for battle
 
 void executeAction(const PlannedAction& action,
                    BattleLog& log,
@@ -461,12 +461,12 @@ void Battle(Player& p, Enemy& e) {
         action.type = actor->decideAction(
         actor == &p ? static_cast<Entity&>(e)
                     : static_cast<Entity&>(p)
-    );
-    action.target = (actor == &p)
+        );
+        action.target = (actor == &p)
                     ? static_cast<Entity*>(&e)
                     : static_cast<Entity*>(&p);
 
-    plannedActions.push_back(action);
+        plannedActions.push_back(action);
     }
 
     // -------- Execution phase --------
