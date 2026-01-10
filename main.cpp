@@ -16,6 +16,7 @@ constexpr float FOCUS_BONUS_MULTIPLIER = 1.5f;
 constexpr int CRIT_CHANCE_PERCENT = 20;
 constexpr float CRIT_MULTIPLIER = 2.0f;
 constexpr float BLOCK_BONUS_MULTIPLIER = 0.5f;
+constexpr int HEAL_AMOUNT = 10;
 
 // --------------------
 // Random helper
@@ -57,6 +58,7 @@ struct ActionResult {
     string target;
 
     int damage = 0;
+    int healed = 0;
     bool isCritical = false;
     bool targetDied = false;
     bool usedFocus = false;
@@ -93,6 +95,7 @@ struct Stats {
 class Entity {
 protected:
     int hp;
+    int max_hp;
     string name;
     bool isBlocking = false;
     int focus = 0;
@@ -100,7 +103,7 @@ protected:
 
 public:
     Entity(string n, int h, int baseInitiative)
-        : hp(h), name(n) {
+        : hp(h), max_hp(h), name(n) {
             stats.baseInitiative = baseInitiative;
         }
 
@@ -201,6 +204,26 @@ public:
     virtual ActionType decideAction(Entity& target) {
         return ActionType::Block;
     }
+
+    int take_heal(int amount) {
+        if (!is_alive())
+            return 0;
+
+        int before = hp;
+        hp = min(hp + amount, max_hp);
+        return hp - before;
+    }
+
+    ActionResult heal() {
+        ActionResult result;
+        result.type = ActionType::Heal;
+        result.actor = name;
+
+        result.healed = take_heal(HEAL_AMOUNT);
+
+        return result;
+    }
+
 };
 
 // --------------------
@@ -223,16 +246,17 @@ public:
     }
 
     ActionType decideAction(Entity& target) override {
-    int playerChoice = 0;
+        int playerChoice = 0;
 
-    while (playerChoice != 1 && playerChoice != 2) {
-        cout << "Player make a choice: 1 - attack, 2 - block\n";
-        cin >> playerChoice;
-    }
+        while (playerChoice < 1 || playerChoice > 3) {
+            cout << "Player make a choice:\n";
+            cout << "1 - attack\n2 - block\n3 - heal\n";
+            cin >> playerChoice;
+        }
 
-    return (playerChoice == 1)
-            ? ActionType::Attack
-            : ActionType::Block;
+        if (playerChoice == 1) return ActionType::Attack;
+        if (playerChoice == 2) return ActionType::Block;
+        return ActionType::Heal;
     }
 };
 
@@ -355,6 +379,11 @@ void renderBattleScreen(
          << "part of incoming damage ";
         }
 
+        if (r.type == ActionType::Heal) {
+        cout << r.actor << " heals for "
+         << r.healed << " HP";
+        }
+
         cout << endl;
 
     if (r.targetDied)
@@ -431,7 +460,19 @@ void executeAction(const PlannedAction& action,
                 log.hasEnemyAction = true;
             }
         }
-    };
+
+        if (action.type == ActionType::Heal) {
+            if (action.actor == &p) {
+            log.playerAction = p.heal();
+            log.hasPlayerAction = true;
+            }
+        else {
+            log.enemyAction = action.actor->heal();
+            log.hasEnemyAction = true;
+            }
+        }
+
+};
 
 // --------------------
 // Battle
