@@ -308,7 +308,6 @@ class EnemyAI{
 // --------------------
 // Enemy
 // --------------------
-
 class Enemy : public Entity {
 protected:
     int base_attack;
@@ -340,7 +339,8 @@ public:
 void renderBattleScreen(
     const Player& p,
     const Enemy& e,
-    const BattleLog& log
+    const BattleLog& log,
+    const vector<Entity*>& turnOrder
 ) {
     clearScreen();
 
@@ -350,6 +350,19 @@ void renderBattleScreen(
     e.info();
 
     cout << "\n--------------------\n";
+
+    cout << "\n--- Initiative order ---\n\n";
+
+    for (const Entity* ent : turnOrder){
+        
+        if (!ent->is_alive())
+        continue;
+
+        cout<< ent->get_name() << " (" << ent->getInitiative() << ")"
+        << "-----";
+        }
+    
+    cout << "\n";
 
     cout << "\n--- Last turn ---\n";
 
@@ -483,10 +496,9 @@ void Battle(Player& p, Enemy& e) {
     vector<Entity*> entities = { &p, &e };
     vector<Entity*> turnOrder;
 
-    setupTurnOrder(entities, turnOrder);
-
     while (true) {
-
+    
+    setupTurnOrder(entities, turnOrder);
     log.clear();
     vector<PlannedAction> plannedActions;
 
@@ -519,7 +531,7 @@ void Battle(Player& p, Enemy& e) {
 
     }
 
-    renderBattleScreen(p, e, log);
+    renderBattleScreen(p, e, log, turnOrder);
 
     if (!p.is_alive()) {
         cout << "\n=== Battle Finished ===\n";
