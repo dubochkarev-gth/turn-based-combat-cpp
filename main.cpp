@@ -308,6 +308,7 @@ class EnemyAI{
 // --------------------
 // Enemy
 // --------------------
+
 class Enemy : public Entity {
 protected:
     int base_attack;
