@@ -451,33 +451,44 @@ void executeAction(const PlannedAction& action,
     log.add(result);
 };
 
+Entity* findFirstAliveEnemy(
+    Entity* actor,
+    const vector<Entity*>& entities
+) {
+  for (Entity* e : entities) {
+        if (e != actor && e->is_alive())
+            return e;
+    }
+    return nullptr;
+}
+
 // Decision function
 
 vector<PlannedAction> planTurn(
     const vector<Entity*>& turnOrder,
-    Player& p,
-    Enemy& e
+    const vector<Entity*>& entities
 ){
     vector<PlannedAction> plannedActions;
 
-     // -------- Decision phase --------
     for (Entity* actor : turnOrder) {
 
-        if (!actor->is_alive())
-            continue;
+        if(!actor->is_alive())
+        continue;
+        
+
+        Entity* target = findFirstAliveEnemy(actor, entities);
+
+        if(!target)
+        continue;
 
         PlannedAction action;
         action.actor = actor;
-        action.type = actor->decideAction(
-        actor == &p ? static_cast<Entity&>(e)
-                    : static_cast<Entity&>(p)
-        );
-        action.target = (actor == &p)
-                    ? static_cast<Entity*>(&e)
-                    : static_cast<Entity*>(&p);
+        action.type = actor->decideAction(*target);
+        action.target = target;
 
         plannedActions.push_back(action);
-    }
+        }
+        
     return plannedActions;
 };
 
@@ -496,7 +507,7 @@ void runBattle(Player& p, Enemy& e) {
     buildTurnOrder(entities, turnOrder);
     log.clear();
     vector<PlannedAction> plannedActions=
-    planTurn(turnOrder, p, e);
+    planTurn(turnOrder, entities);
 
     // -------- Execution phase --------
     for (const PlannedAction& action : plannedActions) {
