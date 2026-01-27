@@ -16,7 +16,6 @@ constexpr float FOCUS_BONUS_MULTIPLIER = 1.5f;
 constexpr int CRIT_CHANCE_PERCENT = 20;
 constexpr float CRIT_MULTIPLIER = 2.0f;
 constexpr float BLOCK_BONUS_MULTIPLIER = 0.5f;
-constexpr int HEAL_AMOUNT = 7;
 
 // --------------------
 // Random helper
@@ -40,7 +39,7 @@ void clearScreen() {
 
 enum class ActionType{
     Attack,
-    Heal,
+    UseItem,
     Block
 };
 
@@ -87,6 +86,18 @@ struct Stats {
     // future:
     // int speed;
     // int agility;
+};
+
+// Item class
+
+enum class ItemType {
+    Heal
+};
+
+struct Item {
+    string name;
+    ItemType type;
+    int power;
 };
 
 // --------------------
@@ -205,25 +216,6 @@ public:
         return ActionType::Block;
     }
 
-    int take_heal(int amount) {
-        if (!is_alive())
-            return 0;
-
-        int before = hp;
-        hp = min(hp + amount, max_hp);
-        return hp - before;
-    }
-
-    ActionResult heal() {
-        ActionResult result;
-        result.type = ActionType::Heal;
-        result.actor = name;
-
-        result.healed = take_heal(HEAL_AMOUNT);
-
-        return result;
-    }
-
     int get_focus() const {
         return focus;
     }
@@ -236,6 +228,7 @@ public:
 class Player : public Entity {
 protected:
     int weapon_bonus;
+    vector<Item> inventory;
 
 public:
     Player(string name, int hp, int baseInitiative, int weapon)
@@ -254,19 +247,64 @@ public:
         cout<< endl;
     }
 
+    void addItem(const Item& item) {
+
+        inventory.push_back(item);
+
+    }
+
+    bool hasItems() const {
+
+        return !inventory.empty();
+
+    }
+
+    ActionResult useItem() {
+        ActionResult result;
+
+        result.type = ActionType::UseItem;
+        result.actor = name;
+
+        if (inventory.empty())
+            return result;
+
+        Item item = inventory.front();
+        inventory.erase(inventory.begin());
+
+        if (item.type == ItemType::Heal) {
+            int before = hp;
+            hp = min(hp + item.power, max_hp);
+            result.healed = hp - before;
+        }
+
+    return result;
+    }
+
     ActionType decideAction(Entity& target) override {
         int playerChoice = 0;
 
         while (playerChoice < 1 || playerChoice > 3) {
             cout << "Player make a choice:\n";
-            cout << "1 - attack\n2 - block\n3 - heal\n";
+            cout << "1 - attack\n2 - block\n3 - Use Item\n";
             cin >> playerChoice;
         }
 
-        if (playerChoice == 1) return ActionType::Attack;
-        if (playerChoice == 2) return ActionType::Block;
-        return ActionType::Heal;
+        if (playerChoice == 1)
+            return ActionType::Attack;
+
+        if (playerChoice == 2)
+            return ActionType::Block;
+
+        if (playerChoice == 3) {
+            if (!hasItems()) {
+            cout << "No items left!\n";
+            return ActionType::Block;
+            }
+        return ActionType::UseItem;
     }
+
+    return ActionType::Block; // safety net
+}
 };
 
 // Decision making for Enemy
@@ -295,11 +333,9 @@ class EnemyAI{
                 return ActionType::Attack;
 
             case AIState::Defensive:{
-                int roll = randomInt(0, 2);
+                int roll = randomInt(0, 1);
                 if (roll == 0)
                     return ActionType::Attack;
-                if (roll == 1)
-                    return ActionType::Heal;
                 else 
                     return ActionType::Block;
             }
@@ -397,9 +433,9 @@ for (const ActionResult& r : log.actions) {
         cout << r.actor << " blocks part of incoming damage";
     }
 
-    if (r.type == ActionType::Heal) {
-        cout << r.actor << " heals for "
-             << r.healed << " HP";
+    if (r.type == ActionType::UseItem && r.healed > 0) {
+    cout << r.actor << " uses item and heals for "
+         << r.healed << " HP";
     }
 
     cout << endl;
@@ -443,8 +479,8 @@ void executeAction(const PlannedAction& action,
             result = action.actor->block();
             break;
 
-        case ActionType::Heal:
-            result = action.actor->heal();
+        case ActionType::UseItem:
+            result = static_cast<Player*>(action.actor)->useItem();
             break;
     }
 
@@ -541,6 +577,9 @@ void runBattle(Player& p, Enemy& e) {
 // --------------------
 int main() {
     Player hero("Dark_Avanger", 100, 10, 5);
+
+    hero.addItem({ "Small Potion", ItemType::Heal, 20 });
+    hero.addItem({ "Small Potion", ItemType::Heal, 20 });
 
     Enemy kobold("Sneaky_Kody", 50, 15, 5, 3);
     Enemy orc("Gazkul_Trakka", 90, 9, 7, 4);
