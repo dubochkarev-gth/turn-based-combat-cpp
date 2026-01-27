@@ -578,8 +578,8 @@ void runBattle(Player& p, Enemy& e) {
 int main() {
     Player hero("Dark_Avanger", 100, 10, 5);
 
-    hero.addItem({ "Small Potion", ItemType::Heal, 20 });
-    hero.addItem({ "Small Potion", ItemType::Heal, 20 });
+    hero.addItem({ "Small Potion", ItemType::Heal, 7 });
+    hero.addItem({ "Small Potion", ItemType::Heal, 7 });
 
     Enemy kobold("Sneaky_Kody", 50, 15, 5, 3);
     Enemy orc("Gazkul_Trakka", 90, 9, 7, 4);
