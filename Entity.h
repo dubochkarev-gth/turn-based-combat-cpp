@@ -64,7 +64,7 @@ public:
 
     bool has_focus() const;
 
-    virtual ActionType decideAction();
+    virtual ActionType decideAction(const std::vector<Entity*>& entities);
     virtual ActionResult attack(Entity& target);
     virtual ActionResult block();
     virtual void info() const;
@@ -104,7 +104,7 @@ public:
     int get_attack_power() const override;
     void setAutoMode(bool value);
     void info() const override;
-    virtual ActionType decideAction() override;
+    ActionType decideAction(const std::vector<Entity*>& entities) override;
 };
 
 enum class AIState
@@ -120,9 +120,10 @@ private:
     AIState state = AIState::Aggressive;
     bool canHeal = false;
     bool hasFocus = false;
+    bool allyLowHp = false;
 
 public:
-    void update(int hp, bool canHealNow, bool hasFocusNow);
+    void update(int hp, bool canHealNow, bool hasFocusNow, bool curAllyLowHp);
     ActionType decideAction() const;
 };
 
@@ -131,6 +132,7 @@ class Enemy : public Entity
 protected:
     int base_attack;
     int strength;
+    bool isHealer = false;
 
 public:
     Enemy(std::string name, int hp, int baseInitiative, int baseAtk, int str);
@@ -139,7 +141,9 @@ public:
 
     int get_attack_power() const override;
 
-    ActionType decideAction() override;
+    void set_isHealer(bool healer);
+
+    ActionType decideAction(const std::vector<Entity*>& entities) override;
     void info() const override;
     
 };

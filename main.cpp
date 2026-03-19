@@ -65,7 +65,8 @@ struct BattleSummary
 enum class TargetType
 {
     Self,
-    FirstAliveEnemy
+    FirstAliveEnemy,
+    LowestHpAlly
 };
 
 struct PlannedAction
@@ -500,6 +501,27 @@ std::vector<Entity *> resolveTargets(
         result.push_back(action.actor);
     }
 
+    if (action.targetType == TargetType::LowestHpAlly)
+    {
+        Entity *best = nullptr;
+        int lowestHp = INT_MAX;
+
+        for (Entity *e : entities)
+        {
+            if (e->getFaction() == action.actor->getFaction() && e->is_alive())
+            {
+                if (e->get_hp() < lowestHp)
+                {
+                    lowestHp = e->get_hp();
+                    best = e;
+                }
+            }
+        }
+
+        if (best)
+            result.push_back(best);
+    }
+
     if (action.targetType == TargetType::FirstAliveEnemy)
     {
         Entity *best = nullptr;
@@ -523,9 +545,26 @@ std::vector<Entity *> resolveTargets(
 
         else
         {
+            float maxThreat = -1.0f;
+
             for (Entity *e : entities)
             {
                 if (e->getFaction() == Faction::Enemy && e->is_alive())
+                {
+                    if (e->get_threat() > maxThreat)
+                    {
+                        maxThreat = e->get_threat();
+                        best = e;
+                    }
+                }
+            }
+        }
+
+        if (!best)
+        {
+            for (Entity *e : entities)
+            {
+                if (e->getFaction() != action.actor->getFaction() && e->is_alive())
                 {
                     best = e;
                     break;
@@ -558,11 +597,11 @@ bool validateAction(
 
     // 2. Target required for attack
     if ((action.type == ActionType::Attack || action.type == ActionType::Burst) && !target)
-    return false;
+        return false;
 
     // 3. Target must be alive for attack
     if ((action.type == ActionType::Attack || action.type == ActionType::Burst) && !target->is_alive())
-    return false;
+        return false;
 
     // 4. Item availability
     if (action.type == ActionType::UseItem)
@@ -629,8 +668,11 @@ TargetType targetTypeSelection(ActionType a)
 {
     if (a == ActionType::Attack || a == ActionType::Burst)
         return TargetType::FirstAliveEnemy;
-    else
-        return TargetType::Self;
+
+    if (a == ActionType::UseItem)
+        return TargetType::LowestHpAlly;
+
+    return TargetType::Self;
 }
 
 // Decision function
@@ -684,7 +726,7 @@ std::vector<PlannedAction> planTurn(
         }
         else
         {
-            action.type = actor->decideAction();
+            action.type = actor->decideAction(turnOrder);
         }
 
         action.targetType = targetTypeSelection(action.type);
@@ -694,7 +736,8 @@ std::vector<PlannedAction> planTurn(
     return plannedActions;
 }
 
-void startTurn(Entity &e) {
+void startTurn(Entity &e)
+{
     // future: status tick, regen, focus decay
     e.set_blocking(false);
 };
@@ -715,6 +758,14 @@ void runSimulation(int runs)
         Enemy striker("Rage_Striker", 55, 14, 9, 4);
         Enemy orc("Gazkul_Trakka", 90, 9, 7, 4);
         Enemy kobold("Ugly_Gobby", 55, 15, 5, 3);
+        Enemy healer("Dark_Priest", 60, 11, 5, 2);
+
+        healer.set_isHealer(true);
+        auto healerInv = std::make_unique<Inventory>();
+        healerInv->add({"Dark Heal", ItemType::Heal, 12});
+        healerInv->add({"Dark Heal", ItemType::Heal, 12});
+        healerInv->add({"Dark Heal", ItemType::Heal, 12});
+        healer.attachInventory(std::move(healerInv));
 
         auto heroInv = std::make_unique<Inventory>();
         heroInv->add({"Small Potion", ItemType::Heal, 7});
@@ -746,8 +797,7 @@ void runSimulation(int runs)
         hero2.setAutoMode(true);
 
         std::vector<Entity *> entities =
-            {
-                &hero, &hero2, &striker, &orc, &kobold};
+            {&hero, &hero2, &healer, &orc, &kobold};
 
         Battle battle(entities, false);
         BattleSummary summary = battle.run();
@@ -808,6 +858,14 @@ int main()
     Enemy striker("Rage_Striker", 55, 14, 9, 4);
     Enemy orc("Gazkul_Trakka", 90, 9, 7, 4);
     Enemy kobold("Ugly_Gobby", 55, 15, 5, 3);
+    Enemy healer("Dark_Priest", 60, 11, 5, 2);
+
+    healer.set_isHealer(true);
+    auto healerInv = std::make_unique<Inventory>();
+    healerInv->add({"Dark Heal", ItemType::Heal, 12});
+    healerInv->add({"Dark Heal", ItemType::Heal, 12});
+    healerInv->add({"Dark Heal", ItemType::Heal, 12});
+    healer.attachInventory(std::move(healerInv));
 
     auto heroInv = std::make_unique<Inventory>();
     heroInv->add({"Small Potion", ItemType::Heal, 7});
@@ -819,7 +877,7 @@ int main()
     orcInv->add({"Crude Potion", ItemType::Heal, 10});
     orc.attachInventory(std::move(orcInv));
 
-    std::vector<Entity *> battleEntities = {&hero, &hero2, &striker, &orc, &kobold};
+    std::vector<Entity *> battleEntities = {&hero, &hero2, &healer, &orc, &kobold};
 
     Item tankCore;
     tankCore.name = "Bulwark Armor";

@@ -199,7 +199,7 @@ ActionResult Entity::block()
     return result;
 }
 
-ActionType Entity::decideAction()
+ActionType Entity::decideAction(const std::vector<Entity*>& entities)
 {
     return ActionType::Block;
 }
@@ -240,9 +240,9 @@ void Entity::equip(const Item &item)
     threatMultiplier *= item.threatMultiplier;
     blockMultiplierFromEquip *= item.blockMultiplierFromEquip;
     if (item.grantsTaunt)
-        {
-            hasTauntSkill = true;
-        }
+    {
+        hasTauntSkill = true;
+    }
 }
 
 bool Entity::has_taunt() const
@@ -286,7 +286,7 @@ void Player::info() const
               << std::endl;
 }
 
-ActionType Player::decideAction()
+ActionType Player::decideAction(const std::vector<Entity*>& entities)
 {
     if (autoMode)
     {
@@ -344,11 +344,11 @@ int Enemy::get_attack_power() const
     return base_attack + strength;
 }
 
-void EnemyAI::update(int hp, bool canHealNow, bool hasFocusNow)
+void EnemyAI::update(int hp, bool canHealNow, bool hasFocusNow, bool curAllyLowHp)
 {
     canHeal = canHealNow;
     hasFocus = hasFocusNow;
-
+    allyLowHp = curAllyLowHp;
     if (hp < 20)
         state = AIState::Desperate;
     else if (hp < 40)
@@ -359,6 +359,9 @@ void EnemyAI::update(int hp, bool canHealNow, bool hasFocusNow)
 
 ActionType EnemyAI::decideAction() const
 {
+    if (canHeal && allyLowHp)
+        return ActionType::UseItem;
+    
     switch (state)
     {
     case AIState::Aggressive:
@@ -386,12 +389,23 @@ ActionType EnemyAI::decideAction() const
     return ActionType::Attack;
 }
 
-ActionType Enemy::decideAction()
+ActionType Enemy::decideAction(const std::vector<Entity*>& entities)
 {
-    ai.update(
-        get_hp(),
-        hasItems(),
-        has_focus());
+    bool allyLowHp = false;
+
+    for (Entity *e : entities)
+    {
+        if (e->getFaction() == Faction::Enemy && e->is_alive())
+        {
+            if (e->get_hp() < e->get_max_hp() * 0.7)
+            {
+                allyLowHp = true;
+                break;
+            }
+        }
+    }
+
+    ai.update(get_hp(), isHealer && hasItems(), has_focus(), allyLowHp);
 
     return ai.decideAction();
 }
@@ -406,3 +420,8 @@ void Enemy::info() const
 
     std::cout << std::endl;
 }
+
+void Enemy::set_isHealer(bool healer)
+{
+    isHealer = healer;
+};
