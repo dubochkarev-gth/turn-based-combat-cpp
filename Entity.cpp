@@ -199,7 +199,7 @@ ActionResult Entity::block()
     return result;
 }
 
-ActionType Entity::decideAction(const std::vector<Entity*>& entities)
+ActionType Entity::decideAction(const std::vector<Entity *> &entities)
 {
     return ActionType::Block;
 }
@@ -239,9 +239,16 @@ void Entity::equip(const Item &item)
     damageMultiplier *= item.damageMultiplier;
     threatMultiplier *= item.threatMultiplier;
     blockMultiplierFromEquip *= item.blockMultiplierFromEquip;
+
     if (item.grantsTaunt)
     {
         hasTauntSkill = true;
+    }
+
+    if (item.grantsHeal)
+    {
+        hasHealSkill = true;
+        add_mana(2);
     }
 }
 
@@ -286,7 +293,7 @@ void Player::info() const
               << std::endl;
 }
 
-ActionType Player::decideAction(const std::vector<Entity*>& entities)
+ActionType Player::decideAction(const std::vector<Entity *> &entities)
 {
     if (autoMode)
     {
@@ -295,6 +302,19 @@ ActionType Player::decideAction(const std::vector<Entity*>& entities)
 
         if (has_focus())
             return ActionType::Attack;
+
+        if (has_heal() && get_mana() >= 3)
+        {
+            for (auto *e : entities)
+            {
+                if (e->getFaction() == getFaction() &&
+                    e->is_alive() &&
+                    e->get_hp() < e->get_max_hp() * 0.6)
+                {
+                    return ActionType::Heal;
+                }
+            }
+        }
 
         int roll = randomInt(1, 100);
         return (roll <= 40) ? ActionType::Attack : ActionType::Block;
@@ -361,7 +381,7 @@ ActionType EnemyAI::decideAction() const
 {
     if (canHeal && allyLowHp)
         return ActionType::UseItem;
-    
+
     switch (state)
     {
     case AIState::Aggressive:
@@ -389,7 +409,7 @@ ActionType EnemyAI::decideAction() const
     return ActionType::Attack;
 }
 
-ActionType Enemy::decideAction(const std::vector<Entity*>& entities)
+ActionType Enemy::decideAction(const std::vector<Entity *> &entities)
 {
     bool allyLowHp = false;
 
@@ -425,3 +445,53 @@ void Enemy::set_isHealer(bool healer)
 {
     isHealer = healer;
 };
+
+int Entity::get_mana() const
+{
+    return resources.mana;
+}
+
+void Entity::add_mana(int amount)
+{
+    resources.mana += amount;
+
+    if (resources.mana > 10) // кап можно потом вынести
+        resources.mana = 10;
+}
+
+bool Entity::spend_mana(int amount)
+{
+    if (resources.mana < amount)
+        return false;
+
+    resources.mana -= amount;
+    return true;
+}
+
+bool Entity::has_heal() const
+{
+    return hasHealSkill;
+}
+
+ActionResult Entity::healSkill(Entity &target)
+{
+    ActionResult result;
+
+    result.type = ActionType::Heal;
+    result.actor = name;
+    result.target = target.get_name();
+
+    const int cost = 3;
+
+    if (!spend_mana(cost))
+    {
+        result.cancelled = true;
+        return result;
+    }
+
+    int healAmount = randomInt(6, 12);
+
+    result.healedPlanned = healAmount;
+
+    return result;
+}

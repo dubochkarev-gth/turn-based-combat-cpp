@@ -346,6 +346,10 @@ void renderBattleScreen(
         {
             std::cout << " G:" << e->get_guard();
         }
+        else if (e->has_heal())
+        {
+            std::cout << " MP:" << e->get_mana();
+        }
         else if (e->getFaction() == Faction::Player)
         {
             std::cout << " M:" << e->get_momentum();
@@ -430,6 +434,11 @@ void renderBattleScreen(
             if (r.usedFocus)
                 std::cout << " (FOCUSED)";
         }
+        if (r.type == ActionType::Heal)
+        {
+            std::cout << r.actor << " heals " << r.target
+                      << " for " << r.healedPlanned << " HP";
+        }
 
         std::cout << std::endl;
 
@@ -484,6 +493,9 @@ void executeAction(const ResolvedAction &action,
         break;
     case ActionType::Burst:
         result = SkillSystem::burst(*action.actor, *action.target);
+        break;
+    case ActionType::Heal:
+        result = action.actor->healSkill(*action.target);
         break;
     }
 
@@ -661,6 +673,13 @@ void applyActionResult(ActionResult &result,
         result.targetDied = !target.is_alive();
         break;
     }
+    case ActionType::Heal:
+    {
+        int before = target.get_hp();
+        target.heal(result.healedPlanned);
+        result.healedPlanned = target.get_hp() - before;
+        break;
+    }
     }
 }
 
@@ -670,6 +689,9 @@ TargetType targetTypeSelection(ActionType a)
         return TargetType::FirstAliveEnemy;
 
     if (a == ActionType::UseItem)
+        return TargetType::Self;
+
+    if (a == ActionType::Heal)
         return TargetType::LowestHpAlly;
 
     return TargetType::Self;
@@ -707,8 +729,10 @@ std::vector<PlannedAction> planTurn(
                 std::cout << "4 - Taunt\n";
             if (actor->get_momentum() >= 2)
                 std::cout << "5 - Burst\n";
+            if (actor->has_heal() && actor->get_mana() >= 3)
+                std::cout << "6 - Heal\n";
 
-            while (choice < 1 || choice > 5)
+            while (choice < 1 || choice > 6)
             {
                 std::cin >> choice;
             }
@@ -721,6 +745,8 @@ std::vector<PlannedAction> planTurn(
                 action.type = ActionType::Taunt;
             else if (choice == 5)
                 action.type = ActionType::Burst;
+            else if (choice == 6 && actor->has_heal())
+                action.type = ActionType::Heal;
             else
                 action.type = ActionType::UseItem;
         }
@@ -742,8 +768,13 @@ void startTurn(Entity &e)
     e.set_blocking(false);
 };
 
-void endTurn(Entity &e) {
+void endTurn(Entity &e)
+{
     // future: status tick, regen, focus decay
+    if (e.has_heal())
+    {
+        e.add_mana(1);
+    }
 };
 
 void runSimulation(int runs)
@@ -854,6 +885,7 @@ int main()
 {
     Player hero("Dark_Avanger", 100, 10, 5);
     Player hero2("Shadow_Blader", 90, 12, 4);
+    Player hero3("Light_Priest", 80, 11, 2);
 
     Enemy striker("Rage_Striker", 55, 14, 9, 4);
     Enemy orc("Gazkul_Trakka", 90, 9, 7, 4);
@@ -877,7 +909,7 @@ int main()
     orcInv->add({"Crude Potion", ItemType::Heal, 10});
     orc.attachInventory(std::move(orcInv));
 
-    std::vector<Entity *> battleEntities = {&hero, &hero2, &healer, &orc, &kobold};
+    std::vector<Entity *> battleEntities = {&hero3, &hero2, &striker, &orc, &kobold};
 
     Item tankCore;
     tankCore.name = "Bulwark Armor";
@@ -893,11 +925,19 @@ int main()
     dpsCore.damageMultiplier = 1.4f;
     dpsCore.threatMultiplier = 0.7f;
 
+    Item healerCore;
+    healerCore.name = "Divine Staff";
+    healerCore.type = ItemType::Equipment;
+    healerCore.grantsHeal = true;
+    healerCore.damageMultiplier = 0.9f;
+
     hero.equip(tankCore);
     hero2.equip(dpsCore);
+    hero3.equip(healerCore);
 
     hero.setAutoMode(true);
     hero2.setAutoMode(true);
+    hero3.setAutoMode(true);
 
     BattleSummary summary;
 

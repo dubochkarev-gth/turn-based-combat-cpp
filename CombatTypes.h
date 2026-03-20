@@ -15,7 +15,8 @@ enum class ActionType
     UseItem,
     Block,
     Taunt,
-    Burst
+    Burst,
+    Heal
 };
 
 struct ActionResult

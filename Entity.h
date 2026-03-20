@@ -35,6 +35,7 @@ protected:
     float blockMultiplierFromEquip = 1.0f;
     Resources resources;
     bool hasTauntSkill = false;
+    bool hasHealSkill = false;
 
 public:
     Entity(std::string n, int h, int baseInitiative, Faction f);
@@ -48,6 +49,9 @@ public:
     bool is_alive() const;
 
     void heal(int amount);
+    virtual ActionResult healSkill(Entity& target);
+    bool has_heal() const;
+    
     int receive_damage(int amount);
 
     void set_blocking(bool);
@@ -90,6 +94,10 @@ public:
     void add_momentum(int amount);
     bool spend_momentum(int amount);
     void reset_momentum();
+
+    int get_mana() const;
+    void add_mana(int amount);
+    bool spend_mana(int amount);
 };
 
 class Player : public Entity

@@ -8,7 +8,7 @@ ActionResult ItemSystem::useItem(Entity& actor)
     ActionResult result;
     result.type = ActionType::UseItem;
     result.actor = actor.get_name();
-    result.target = actor.get_name();
+    result.target = "";
 
     Inventory* inv = actor.getInventory();
 

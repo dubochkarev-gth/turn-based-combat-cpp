@@ -20,4 +20,5 @@ struct Item
     float blockMultiplierFromEquip = 1.0f;
 
     bool grantsTaunt = false;
+    bool grantsHeal = false;
 };
