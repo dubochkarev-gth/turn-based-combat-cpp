@@ -1,10 +1,11 @@
 // ---SkillSystem.h ---
+
 #pragma once
+#include "Skill.h"
 #include "Entity.h"
-#include "CombatTypes.h"
 
 class SkillSystem
 {
 public:
-    static ActionResult burst(Entity& actor, Entity& target);
+    static ActionResult execute(const Skill& skill, Entity& actor, Entity& target);
 };

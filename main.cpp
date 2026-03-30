@@ -74,6 +74,7 @@ struct PlannedAction
     Entity *actor = nullptr;
     ActionType type;
     TargetType targetType;
+    const Skill *skill = nullptr;
 };
 
 struct ResolvedAction
@@ -81,6 +82,7 @@ struct ResolvedAction
     Entity *actor = nullptr;
     ActionType type;
     Entity *target = nullptr;
+    const Skill *skill = nullptr;
 };
 
 struct BattleLog
@@ -193,6 +195,7 @@ public:
                     resolved.actor = action.actor;
                     resolved.type = action.type;
                     resolved.target = target;
+                    resolved.skill = action.skill;
 
                     ActionResult validationResult;
 
@@ -236,7 +239,7 @@ public:
                                 static_cast<float>(last.healedPlanned) /
                                 static_cast<float>(target->get_max_hp());
 
-                            action.actor->add_threat(normalized * 0.5f);
+                            action.actor->add_threat(normalized * 1.5f);
                         }
                     }
                 }
@@ -316,6 +319,34 @@ public:
     };
 };
 
+bool canUseSkill(const Entity *actor, const Skill &s)
+{
+    switch (s.resource)
+    {
+    case ResourceType::Mana:
+        return actor->get_mana() >= s.cost;
+
+    case ResourceType::Momentum:
+        return actor->get_momentum() >= s.cost;
+
+    case ResourceType::Guard:
+        return actor->get_guard() >= s.cost;
+
+    default:
+        return true;
+    }
+}
+
+bool hasSkill(const Entity *e, ActionType type)
+{
+    for (const Skill &s : e->getSkills())
+    {
+        if (s.type == type)
+            return true;
+    }
+    return false;
+}
+
 // SCREEN DRAW AFTER CALCULATION
 
 void renderBattleScreen(
@@ -331,7 +362,7 @@ void renderBattleScreen(
     {
         char marker = 'E';
         if (e->getFaction() == Faction::Player)
-            marker = (e->has_taunt() ? 'T' : 'D');
+            marker = (hasSkill(e, ActionType::Taunt) ? 'T' : 'D');
 
         std::cout << "[" << marker << "] ";
 
@@ -342,11 +373,11 @@ void renderBattleScreen(
                   << e->get_hp() << "/"
                   << e->get_max_hp();
 
-        if (e->has_taunt())
+        if (hasSkill(e, ActionType::Taunt))
         {
             std::cout << " G:" << e->get_guard();
         }
-        else if (e->has_heal())
+        else if (hasSkill(e, ActionType::Heal))
         {
             std::cout << " MP:" << e->get_mana();
         }
@@ -388,8 +419,10 @@ void renderBattleScreen(
     {
         if (r.cancelled)
         {
-            std::cout << r.actor << " tries to attack, but " << r.target
-                      << " is already dead";
+            std::cout << r.actor << " action failed";
+            if (!r.target.empty())
+                std::cout << " (target: " << r.target << ")";
+            std::cout << std::endl;
             continue;
         }
         if (r.type == ActionType::Attack)
@@ -475,32 +508,34 @@ void executeAction(const ResolvedAction &action,
 
     ActionResult result;
 
-    switch (action.type)
+    if (action.skill)
     {
-    case ActionType::Attack:
-        result = action.actor->attack(*action.target);
-        break;
+        result = SkillSystem::execute(*action.skill, *action.actor, *action.target);
+    }
+    else
+    {
+        switch (action.type)
+        {
+        case ActionType::Attack:
+            result = action.actor->attack(*action.target);
+            break;
 
-    case ActionType::Block:
-        result = action.actor->block();
-        break;
+        case ActionType::Block:
+            result = action.actor->block();
+            break;
 
-    case ActionType::UseItem:
-        result = ItemSystem::useItem(*action.actor);
-        break;
-    case ActionType::Taunt:
-        result = action.actor->taunt();
-        break;
-    case ActionType::Burst:
-        result = SkillSystem::burst(*action.actor, *action.target);
-        break;
-    case ActionType::Heal:
-        result = action.actor->healSkill(*action.target);
-        break;
+        case ActionType::UseItem:
+            result = ItemSystem::useItem(*action.actor);
+            break;
+
+        default:
+            result.cancelled = true;
+            break;
+        }
     }
 
     log.add(result);
-};
+}
 
 std::vector<Entity *> resolveTargets(
     const PlannedAction &action,
@@ -608,11 +643,11 @@ bool validateAction(
     }
 
     // 2. Target required for attack
-    if ((action.type == ActionType::Attack || action.type == ActionType::Burst) && !target)
+    if (action.skill && !target)
         return false;
 
     // 3. Target must be alive for attack
-    if ((action.type == ActionType::Attack || action.type == ActionType::Burst) && !target->is_alive())
+    if (action.skill && !target->is_alive())
         return false;
 
     // 4. Item availability
@@ -640,7 +675,17 @@ void applyActionResult(ActionResult &result,
         result.damageApplied = actualDamage;
         result.damageBlocked = result.damagePlanned - actualDamage;
         result.targetDied = !target.is_alive();
-        if (actor.getFaction() == Faction::Player && !actor.has_taunt())
+        bool isTank = false;
+        for (const Skill &s : actor.getSkills())
+        {
+            if (s.type == ActionType::Taunt)
+            {
+                isTank = true;
+                break;
+            }
+        }
+
+        if (actor.getFaction() == Faction::Player && !isTank)
         {
             actor.add_momentum(1);
         }
@@ -651,7 +696,17 @@ void applyActionResult(ActionResult &result,
     {
         actor.set_blocking(true);
         actor.add_focus(1);
-        if (actor.has_taunt())
+        bool hasTaunt = false;
+        for (const Skill &s : actor.getSkills())
+        {
+            if (s.type == ActionType::Taunt)
+            {
+                hasTaunt = true;
+                break;
+            }
+        }
+
+        if (hasTaunt)
         {
             actor.add_guard(1);
         }
@@ -683,16 +738,21 @@ void applyActionResult(ActionResult &result,
     }
 }
 
-TargetType targetTypeSelection(ActionType a)
+TargetType targetTypeSelection(const PlannedAction &action)
 {
-    if (a == ActionType::Attack || a == ActionType::Burst)
+    if (action.skill)
+    {
+        if (action.skill->type == ActionType::Heal)
+            return TargetType::LowestHpAlly;
+
+        return TargetType::FirstAliveEnemy;
+    }
+
+    if (action.type == ActionType::Attack)
         return TargetType::FirstAliveEnemy;
 
-    if (a == ActionType::UseItem)
+    if (action.type == ActionType::UseItem)
         return TargetType::Self;
-
-    if (a == ActionType::Heal)
-        return TargetType::LowestHpAlly;
 
     return TargetType::Self;
 }
@@ -716,46 +776,88 @@ std::vector<PlannedAction> planTurn(
         if (interactive &&
             actor->getFaction() == Faction::Player)
         {
-            int choice = 0;
+            std::vector<ActionType> baseActions;
+            std::vector<const Skill *> skillActions;
+
+            int option = 1;
 
             std::cout << "\n"
-                      << actor->get_name()
-                      << " choose action:\n";
-            std::cout << "1 - Attack\n";
-            std::cout << "2 - Block\n";
-            if (actor->hasItems())
-                std::cout << "3 - Use Item\n";
-            if (actor->has_taunt() && actor->get_guard() >= 3)
-                std::cout << "4 - Taunt\n";
-            if (actor->get_momentum() >= 2)
-                std::cout << "5 - Burst\n";
-            if (actor->has_heal() && actor->get_mana() >= 3)
-                std::cout << "6 - Heal\n";
+                      << actor->get_name() << " choose action:\n";
 
-            while (choice < 1 || choice > 6)
+            // --- base ---
+            std::cout << option << " - Attack\n";
+            baseActions.push_back(ActionType::Attack);
+            option++;
+
+            std::cout << option << " - Block\n";
+            baseActions.push_back(ActionType::Block);
+            option++;
+
+            if (actor->hasItems())
+            {
+                std::cout << option << " - Use Item\n";
+                baseActions.push_back(ActionType::UseItem);
+                option++;
+            }
+
+            // --- skills ---
+            for (const Skill &s : actor->getSkills())
+            {
+                if (!canUseSkill(actor, s))
+                    continue;
+
+                std::cout << option << " - " << s.name;
+
+                if (s.resource == ResourceType::Mana)
+                    std::cout << " (MP:" << s.cost << ")";
+                if (s.resource == ResourceType::Momentum)
+                    std::cout << " (M:" << s.cost << ")";
+                if (s.resource == ResourceType::Guard)
+                    std::cout << " (G:" << s.cost << ")";
+
+                std::cout << "\n";
+
+                skillActions.push_back(&s);
+                option++;
+            }
+
+            int totalOptions = baseActions.size() + skillActions.size();
+
+            int choice = 0;
+            while (choice < 1 || choice > totalOptions)
             {
                 std::cin >> choice;
             }
 
-            if (choice == 1)
-                action.type = ActionType::Attack;
-            else if (choice == 2)
-                action.type = ActionType::Block;
-            else if (choice == 4 && actor->has_taunt())
-                action.type = ActionType::Taunt;
-            else if (choice == 5)
-                action.type = ActionType::Burst;
-            else if (choice == 6 && actor->has_heal())
-                action.type = ActionType::Heal;
+            int baseCount = baseActions.size();
+
+            if (choice <= baseCount)
+            {
+                action.type = baseActions[choice - 1];
+            }
             else
-                action.type = ActionType::UseItem;
+            {
+                int skillIndex = choice - baseCount - 1;
+                action.skill = skillActions[skillIndex];
+            }
         }
         else
         {
             action.type = actor->decideAction(turnOrder);
+            if (!action.skill)
+            {
+                for (const Skill &s : actor->getSkills())
+                {
+                    if (s.type == action.type)
+                    {
+                        action.skill = &s;
+                        break;
+                    }
+                }
+            }
         }
 
-        action.targetType = targetTypeSelection(action.type);
+        action.targetType = targetTypeSelection(action);
         plannedActions.push_back(action);
     }
 
@@ -771,9 +873,22 @@ void startTurn(Entity &e)
 void endTurn(Entity &e)
 {
     // future: status tick, regen, focus decay
-    if (e.has_heal())
+    bool hasHeal = false;
+    for (const Skill &s : e.getSkills())
     {
-        e.add_mana(1);
+        if (s.type == ActionType::Heal)
+        {
+            hasHeal = true;
+            break;
+        }
+    }
+
+    if (hasHeal)
+    {
+        if (randomInt(1, 100) <= 60)
+        {
+            e.add_mana(1);
+        }
     }
 };
 
@@ -793,19 +908,19 @@ void runSimulation(int runs)
 
         healer.set_isHealer(true);
         auto healerInv = std::make_unique<Inventory>();
-        healerInv->add({"Dark Heal", ItemType::Heal, 12});
-        healerInv->add({"Dark Heal", ItemType::Heal, 12});
-        healerInv->add({"Dark Heal", ItemType::Heal, 12});
+        healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
+        healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
+        healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
         healer.attachInventory(std::move(healerInv));
 
         auto heroInv = std::make_unique<Inventory>();
-        heroInv->add({"Small Potion", ItemType::Heal, 7});
-        heroInv->add({"Small Potion", ItemType::Heal, 7});
+        heroInv->add({"Small Potion", ItemType::Heal, {}, 7});
+        heroInv->add({"Small Potion", ItemType::Heal, {}, 7});
         hero.attachInventory(std::move(heroInv));
 
         auto orcInv = std::make_unique<Inventory>();
-        orcInv->add({"Crude Potion", ItemType::Heal, 10});
-        orcInv->add({"Crude Potion", ItemType::Heal, 10});
+        orcInv->add({"Crude Potion", ItemType::Heal, {}, 10});
+        orcInv->add({"Crude Potion", ItemType::Heal, {}, 10});
         orc.attachInventory(std::move(orcInv));
 
         Item tankCore;
@@ -894,30 +1009,42 @@ int main()
 
     healer.set_isHealer(true);
     auto healerInv = std::make_unique<Inventory>();
-    healerInv->add({"Dark Heal", ItemType::Heal, 12});
-    healerInv->add({"Dark Heal", ItemType::Heal, 12});
-    healerInv->add({"Dark Heal", ItemType::Heal, 12});
+    healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
+    healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
+    healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
     healer.attachInventory(std::move(healerInv));
 
     auto heroInv = std::make_unique<Inventory>();
-    heroInv->add({"Small Potion", ItemType::Heal, 7});
-    heroInv->add({"Small Potion", ItemType::Heal, 7});
+    heroInv->add({"Small Potion", ItemType::Heal, {}, 7});
+    heroInv->add({"Small Potion", ItemType::Heal, {}, 7});
     hero.attachInventory(std::move(heroInv));
 
     auto orcInv = std::make_unique<Inventory>();
-    orcInv->add({"Crude Potion", ItemType::Heal, 10});
-    orcInv->add({"Crude Potion", ItemType::Heal, 10});
+    orcInv->add({"Crude Potion", ItemType::Heal, {}, 10});
+    orcInv->add({"Crude Potion", ItemType::Heal, {}, 10});
     orc.attachInventory(std::move(orcInv));
 
     std::vector<Entity *> battleEntities = {&hero3, &hero2, &striker, &orc, &kobold};
 
-    Item tankCore;
-    tankCore.name = "Bulwark Armor";
-    tankCore.type = ItemType::Equipment;
-    tankCore.damageMultiplier = 0.85f;
-    tankCore.threatMultiplier = 1.6f;
-    tankCore.blockMultiplierFromEquip = 0.9f;
-    tankCore.grantsTaunt = true;
+    Skill burst;
+    burst.name = "Burst";
+    burst.type = ActionType::Burst;
+    burst.resource = ResourceType::Momentum;
+    burst.cost = 2;
+    burst.powerMultiplier = 3.0f;
+
+    Skill heal;
+    heal.name = "Heal";
+    heal.type = ActionType::Heal;
+    heal.resource = ResourceType::Mana;
+    heal.cost = 3;
+    heal.powerMultiplier = 1.0f;
+
+    Skill taunt;
+    taunt.name = "Taunt";
+    taunt.type = ActionType::Taunt;
+    taunt.resource = ResourceType::Guard;
+    taunt.cost = 3;
 
     Item dpsCore;
     dpsCore.name = "Executioner Blade";
@@ -925,11 +1052,21 @@ int main()
     dpsCore.damageMultiplier = 1.4f;
     dpsCore.threatMultiplier = 0.7f;
 
+    Item tankCore;
+    tankCore.name = "Bulwark Armor";
+    tankCore.type = ItemType::Equipment;
+    tankCore.damageMultiplier = 0.85f;
+    tankCore.threatMultiplier = 1.6f;
+    tankCore.blockMultiplierFromEquip = 0.9f;
+
     Item healerCore;
     healerCore.name = "Divine Staff";
     healerCore.type = ItemType::Equipment;
-    healerCore.grantsHeal = true;
-    healerCore.damageMultiplier = 0.9f;
+    healerCore.damageMultiplier = 0.5f;
+
+    healerCore.skills.push_back(heal);
+    tankCore.skills.push_back(taunt);
+    dpsCore.skills.push_back(burst);
 
     hero.equip(tankCore);
     hero2.equip(dpsCore);

@@ -109,27 +109,6 @@ bool Entity::spend_guard(int amount)
     return true;
 }
 
-ActionResult Entity::taunt()
-{
-    ActionResult result;
-    result.type = ActionType::Taunt;
-    result.actor = name;
-    result.target = name;
-
-    const int cost = 3;
-
-    if (!spend_guard(cost))
-    {
-        result.cancelled = true;
-        return result;
-    }
-
-    const float flatThreat = 0.3f;
-    add_threat(flatThreat);
-
-    return result;
-}
-
 int Entity::get_momentum() const
 {
     return resources.momentum;
@@ -240,21 +219,17 @@ void Entity::equip(const Item &item)
     threatMultiplier *= item.threatMultiplier;
     blockMultiplierFromEquip *= item.blockMultiplierFromEquip;
 
-    if (item.grantsTaunt)
+    for (const Skill &s : item.skills)
     {
-        hasTauntSkill = true;
-    }
+        skills.push_back(s);
 
-    if (item.grantsHeal)
-    {
-        hasHealSkill = true;
-        add_mana(2);
-    }
-}
+        // можно сразу открыть ресурс
+        if (s.resource == ResourceType::Mana)
+            add_mana(2);
 
-bool Entity::has_taunt() const
-{
-    return hasTauntSkill;
+        if (s.resource == ResourceType::Guard)
+            add_guard(1);
+    }
 }
 
 // =======================
@@ -303,15 +278,18 @@ ActionType Player::decideAction(const std::vector<Entity *> &entities)
         if (has_focus())
             return ActionType::Attack;
 
-        if (has_heal() && get_mana() >= 3)
+        for (const Skill &s : getSkills())
         {
-            for (auto *e : entities)
+            if (s.type == ActionType::Heal && get_mana() >= s.cost)
             {
-                if (e->getFaction() == getFaction() &&
-                    e->is_alive() &&
-                    e->get_hp() < e->get_max_hp() * 0.6)
+                for (auto *e : entities)
                 {
-                    return ActionType::Heal;
+                    if (e->getFaction() == getFaction() &&
+                        e->is_alive() &&
+                        e->get_hp() < e->get_max_hp() * 0.6)
+                    {
+                        return ActionType::Heal;
+                    }
                 }
             }
         }
@@ -466,32 +444,4 @@ bool Entity::spend_mana(int amount)
 
     resources.mana -= amount;
     return true;
-}
-
-bool Entity::has_heal() const
-{
-    return hasHealSkill;
-}
-
-ActionResult Entity::healSkill(Entity &target)
-{
-    ActionResult result;
-
-    result.type = ActionType::Heal;
-    result.actor = name;
-    result.target = target.get_name();
-
-    const int cost = 3;
-
-    if (!spend_mana(cost))
-    {
-        result.cancelled = true;
-        return result;
-    }
-
-    int healAmount = randomInt(6, 12);
-
-    result.healedPlanned = healAmount;
-
-    return result;
 }

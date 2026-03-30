@@ -6,6 +6,7 @@
 #include "Item.h"
 #include "Resources.h"
 #include "Inventory.h"
+#include "Skill.h"
 
 enum class Faction
 {
@@ -34,14 +35,13 @@ protected:
     float threatMultiplier = 1.0f;
     float blockMultiplierFromEquip = 1.0f;
     Resources resources;
-    bool hasTauntSkill = false;
-    bool hasHealSkill = false;
+    std::vector<Skill> skills;
 
 public:
     Entity(std::string n, int h, int baseInitiative, Faction f);
 
     int get_hp() const;
-    int get_max_hp () const;
+    int get_max_hp() const;
     int get_focus() const;
     std::string get_name() const;
     Faction getFaction() const;
@@ -49,8 +49,6 @@ public:
     bool is_alive() const;
 
     void heal(int amount);
-    virtual ActionResult healSkill(Entity& target);
-    bool has_heal() const;
     
     int receive_damage(int amount);
 
@@ -68,27 +66,27 @@ public:
 
     bool has_focus() const;
 
-    virtual ActionType decideAction(const std::vector<Entity*>& entities);
-    virtual ActionResult attack(Entity& target);
+    virtual ActionType decideAction(const std::vector<Entity *> &entities);
+    virtual ActionResult attack(Entity &target);
     virtual ActionResult block();
     virtual void info() const;
-    virtual ActionResult taunt();
 
-    void attachInventory(std::unique_ptr<Inventory> inv){
+    void attachInventory(std::unique_ptr<Inventory> inv)
+    {
         inventory = std::move(inv);
     }
 
-    Inventory* getInventory(){
+    Inventory *getInventory()
+    {
         return inventory.get();
     }
 
     bool hasItems() const;
-    void equip(const Item& item);
+    void equip(const Item &item);
 
     int get_guard() const;
     void add_guard(int amount);
     bool spend_guard(int amount);
-    bool has_taunt() const;
 
     int get_momentum() const;
     void add_momentum(int amount);
@@ -98,6 +96,12 @@ public:
     int get_mana() const;
     void add_mana(int amount);
     bool spend_mana(int amount);
+    const std::vector<Skill> &getSkills() const { return skills; }
+
+    void addSkill(const Skill &s)
+    {
+        skills.push_back(s);
+    }
 };
 
 class Player : public Entity
@@ -112,7 +116,7 @@ public:
     int get_attack_power() const override;
     void setAutoMode(bool value);
     void info() const override;
-    ActionType decideAction(const std::vector<Entity*>& entities) override;
+    ActionType decideAction(const std::vector<Entity *> &entities) override;
 };
 
 enum class AIState
@@ -151,7 +155,6 @@ public:
 
     void set_isHealer(bool healer);
 
-    ActionType decideAction(const std::vector<Entity*>& entities) override;
+    ActionType decideAction(const std::vector<Entity *> &entities) override;
     void info() const override;
-    
 };

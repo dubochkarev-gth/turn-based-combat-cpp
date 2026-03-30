@@ -24,7 +24,7 @@ ActionResult ItemSystem::useItem(Entity& actor)
 
     if (item.type == ItemType::Heal)
     {
-        result.healedPlanned = item.power;
+        result.healedPlanned = static_cast<int>(item.power * 0.7f);
     }
 
     return result;

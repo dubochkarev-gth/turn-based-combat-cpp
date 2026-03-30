@@ -4,27 +4,81 @@
 
 extern int randomInt(int min, int max);
 
-ActionResult SkillSystem::burst(Entity& actor, Entity& target)
+ActionResult SkillSystem::execute(const Skill& skill, Entity& actor, Entity& target)
 {
     ActionResult result;
 
-    result.type = ActionType::Burst;
+    result.type = skill.type;
     result.actor = actor.get_name();
     result.target = target.get_name();
 
-    const int cost = 2;
+    // ======================
+    // RESOURCE CHECK
+    // ======================
+    bool ok = false;
 
-    if (!actor.spend_momentum(cost))
+    switch (skill.resource)
+    {
+        case ResourceType::Mana:
+            ok = actor.spend_mana(skill.cost);
+            break;
+
+        case ResourceType::Momentum:
+            ok = actor.spend_momentum(skill.cost);
+            break;
+
+        case ResourceType::Guard:
+            ok = actor.spend_guard(skill.cost);
+            break;
+
+        default:
+            ok = true;
+    }
+
+    if (!ok)
     {
         result.cancelled = true;
         return result;
     }
 
-    int dmg = randomInt(1, actor.get_attack_power());
+    // ======================
+    // EFFECT SYSTEM
+    // ======================
+    switch (skill.type)
+    {
+        case ActionType::Attack:
+        case ActionType::Burst:
+        {
+            int dmg = randomInt(1, actor.get_attack_power());
+            dmg = static_cast<int>(dmg * skill.powerMultiplier);
+            result.damagePlanned = dmg;
+            break;
+        }
 
-    dmg = static_cast<int>(dmg * 3.0f);
+        case ActionType::Heal:
+        {
+            int heal = randomInt(6, 12);
+            heal = static_cast<int>(heal * skill.powerMultiplier * 0.8f);
+            result.healedPlanned = heal;
+            break;
+        }
 
-    result.damagePlanned = dmg;
+        case ActionType::Taunt:
+        {
+            const float flatThreat = 0.3f;
+            actor.add_threat(flatThreat);
+            break;
+        }
+
+        case ActionType::Block:
+        {
+            
+            break;
+        }
+
+        default:
+            break;
+    }
 
     return result;
 }
