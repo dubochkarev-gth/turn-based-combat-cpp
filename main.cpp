@@ -33,6 +33,12 @@ void clearScreen()
 #endif
 };
 
+struct BattleContext
+{
+    std::vector<std::unique_ptr<Entity>> owned;
+    std::vector<Entity *> raw;
+};
+
 struct FighterStats
 {
     std::string name;
@@ -885,12 +891,14 @@ void endTurn(Entity &e)
 
     if (hasHeal)
     {
-        if (randomInt(1, 100) <= 60)
+        if (randomInt(1, 100) <= 100)
         {
             e.add_mana(1);
         }
     }
 };
+
+BattleContext prepBattle(bool autoMode);
 
 void runSimulation(int runs)
 {
@@ -898,54 +906,10 @@ void runSimulation(int runs)
 
     for (int i = 0; i < runs; i++)
     {
-        Player hero("Dark_Avanger", 100, 10, 5);
-        Player hero2("Shadow_Blader", 90, 12, 4);
+        
+         auto ctx = prepBattle(true); // <-- ВОТ ЭТО
 
-        Enemy striker("Rage_Striker", 55, 14, 9, 4);
-        Enemy orc("Gazkul_Trakka", 90, 9, 7, 4);
-        Enemy kobold("Ugly_Gobby", 55, 15, 5, 3);
-        Enemy healer("Dark_Priest", 60, 11, 5, 2);
-
-        healer.set_isHealer(true);
-        auto healerInv = std::make_unique<Inventory>();
-        healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
-        healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
-        healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
-        healer.attachInventory(std::move(healerInv));
-
-        auto heroInv = std::make_unique<Inventory>();
-        heroInv->add({"Small Potion", ItemType::Heal, {}, 7});
-        heroInv->add({"Small Potion", ItemType::Heal, {}, 7});
-        hero.attachInventory(std::move(heroInv));
-
-        auto orcInv = std::make_unique<Inventory>();
-        orcInv->add({"Crude Potion", ItemType::Heal, {}, 10});
-        orcInv->add({"Crude Potion", ItemType::Heal, {}, 10});
-        orc.attachInventory(std::move(orcInv));
-
-        Item tankCore;
-        tankCore.name = "Bulwark Armor";
-        tankCore.type = ItemType::Equipment;
-        tankCore.damageMultiplier = 0.85f;
-        tankCore.threatMultiplier = 1.6f;
-        tankCore.blockMultiplierFromEquip = 0.8f;
-
-        Item dpsCore;
-        dpsCore.name = "Executioner Blade";
-        dpsCore.type = ItemType::Equipment;
-        dpsCore.damageMultiplier = 1.4f;
-        dpsCore.threatMultiplier = 0.7f;
-
-        hero.equip(tankCore);
-        hero2.equip(dpsCore);
-
-        hero.setAutoMode(true);
-        hero2.setAutoMode(true);
-
-        std::vector<Entity *> entities =
-            {&hero, &hero2, &healer, &orc, &kobold};
-
-        Battle battle(entities, false);
+        Battle battle(ctx.raw, false);
         BattleSummary summary = battle.run();
 
         stats.runs++;
@@ -993,64 +957,34 @@ void runSimulation(int runs)
     }
 }
 
-// --------------------
-// Main
-// --------------------
-int main()
+BattleContext prepBattle(bool autoMode)
 {
-    Player hero("Dark_Avanger", 100, 10, 5);
-    Player hero2("Shadow_Blader", 90, 12, 4);
-    Player hero3("Light_Priest", 80, 11, 2);
+    BattleContext ctx;
 
-    Enemy striker("Rage_Striker", 55, 14, 9, 4);
-    Enemy orc("Gazkul_Trakka", 90, 9, 7, 4);
-    Enemy kobold("Ugly_Gobby", 55, 15, 5, 3);
-    Enemy healer("Dark_Priest", 60, 11, 5, 2);
+    // --- CREATE ENTITIES ---
+    auto hero = std::make_unique<Player>("Dark_Avanger", 100, 10, 5);
+    auto hero2 = std::make_unique<Player>("Shadow_Blader", 90, 12, 4);
+    auto hero3 = std::make_unique<Player>("Light_Priest", 80, 11, 2);
 
-    healer.set_isHealer(true);
-    auto healerInv = std::make_unique<Inventory>();
-    healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
-    healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
-    healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
-    healer.attachInventory(std::move(healerInv));
+    auto striker = std::make_unique<Enemy>("Rage_Striker", 55, 14, 9, 4);
+    auto orc = std::make_unique<Enemy>("Gazkul_Trakka", 90, 9, 7, 4);
+    auto kobold = std::make_unique<Enemy>("Ugly_Gobby", 55, 15, 5, 3);
+    auto healer = std::make_unique<Enemy>("Dark_Priest", 60, 11, 5, 2);
 
-    auto heroInv = std::make_unique<Inventory>();
-    heroInv->add({"Small Potion", ItemType::Heal, {}, 7});
-    heroInv->add({"Small Potion", ItemType::Heal, {}, 7});
-    hero.attachInventory(std::move(heroInv));
+    healer->set_isHealer(true);
 
-    auto orcInv = std::make_unique<Inventory>();
-    orcInv->add({"Crude Potion", ItemType::Heal, {}, 10});
-    orcInv->add({"Crude Potion", ItemType::Heal, {}, 10});
-    orc.attachInventory(std::move(orcInv));
+    // --- SKILLS ---
+    Skill burst{"Burst", ActionType::Burst, ResourceType::Momentum, 2, 3.0f};
+    Skill heal{"Heal", ActionType::Heal, ResourceType::Mana, 3, 1.0f};
+    Skill taunt{"Taunt", ActionType::Taunt, ResourceType::Guard, 3};
 
-    std::vector<Entity *> battleEntities = {&hero3, &hero2, &striker, &orc, &kobold};
-
-    Skill burst;
-    burst.name = "Burst";
-    burst.type = ActionType::Burst;
-    burst.resource = ResourceType::Momentum;
-    burst.cost = 2;
-    burst.powerMultiplier = 3.0f;
-
-    Skill heal;
-    heal.name = "Heal";
-    heal.type = ActionType::Heal;
-    heal.resource = ResourceType::Mana;
-    heal.cost = 3;
-    heal.powerMultiplier = 1.0f;
-
-    Skill taunt;
-    taunt.name = "Taunt";
-    taunt.type = ActionType::Taunt;
-    taunt.resource = ResourceType::Guard;
-    taunt.cost = 3;
-
+    // --- ITEMS ---
     Item dpsCore;
     dpsCore.name = "Executioner Blade";
     dpsCore.type = ItemType::Equipment;
     dpsCore.damageMultiplier = 1.4f;
     dpsCore.threatMultiplier = 0.7f;
+    dpsCore.skills.push_back(burst);
 
     Item tankCore;
     tankCore.name = "Bulwark Armor";
@@ -1058,23 +992,65 @@ int main()
     tankCore.damageMultiplier = 0.85f;
     tankCore.threatMultiplier = 1.6f;
     tankCore.blockMultiplierFromEquip = 0.9f;
+    tankCore.skills.push_back(taunt);
 
     Item healerCore;
     healerCore.name = "Divine Staff";
     healerCore.type = ItemType::Equipment;
     healerCore.damageMultiplier = 0.5f;
-
     healerCore.skills.push_back(heal);
-    tankCore.skills.push_back(taunt);
-    dpsCore.skills.push_back(burst);
 
-    hero.equip(tankCore);
-    hero2.equip(dpsCore);
-    hero3.equip(healerCore);
+    // --- EQUIP ---
+    hero->equip(tankCore);
+    hero2->equip(dpsCore);
+    hero3->equip(healerCore);
 
-    hero.setAutoMode(true);
-    hero2.setAutoMode(true);
-    hero3.setAutoMode(true);
+    // --- INVENTORY ---
+    auto heroInv = std::make_unique<Inventory>();
+    heroInv->add({"Small Potion", ItemType::Heal, {}, 7});
+    heroInv->add({"Small Potion", ItemType::Heal, {}, 7});
+    hero->attachInventory(std::move(heroInv));
+
+    auto healerInv = std::make_unique<Inventory>();
+    healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
+    healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
+    healerInv->add({"Dark Heal", ItemType::Heal, {}, 12});
+    healer->attachInventory(std::move(healerInv));
+
+    auto orcInv = std::make_unique<Inventory>();
+    orcInv->add({"Crude Potion", ItemType::Heal, {}, 10});
+    orcInv->add({"Crude Potion", ItemType::Heal, {}, 10});
+    orc->attachInventory(std::move(orcInv));
+
+    // --- AUTO MODE ---
+    hero->setAutoMode(autoMode);
+    hero2->setAutoMode(autoMode);
+    hero3->setAutoMode(autoMode);
+
+    // --- STORE ---
+    ctx.raw = {
+        hero3.get(),
+        hero2.get(),
+        striker.get(),
+        orc.get(),
+        kobold.get()};
+
+    ctx.owned.push_back(std::move(hero));
+    ctx.owned.push_back(std::move(hero2));
+    ctx.owned.push_back(std::move(hero3));
+    ctx.owned.push_back(std::move(striker));
+    ctx.owned.push_back(std::move(orc));
+    ctx.owned.push_back(std::move(kobold));
+    ctx.owned.push_back(std::move(healer));
+
+    return ctx;
+}
+
+// --------------------
+// Main
+// --------------------
+int main()
+{
 
     BattleSummary summary;
 
@@ -1082,8 +1058,11 @@ int main()
 
     if (!simflag)
     {
-        Battle battle(battleEntities, true);
+        auto ctx = prepBattle(true);
+
+        Battle battle(ctx.raw, true);
         summary = battle.run();
+
     }
     else
     {
