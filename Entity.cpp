@@ -223,7 +223,6 @@ void Entity::equip(const Item &item)
     {
         skills.push_back(s);
 
-        // можно сразу открыть ресурс
         if (s.resource == ResourceType::Mana)
             add_mana(2);
 
